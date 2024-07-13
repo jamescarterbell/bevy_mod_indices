@@ -1,0 +1,5 @@
+Just a simple indexing experiment that I'd like to take parts of and move them into bevy core:
+
+1. EntityIndex as a trait would mark a type as an index and provide information on how to update the index structure.
+2. EntityIndex would autmatically impl Budnle and WorldQuery for a private InternalIndex type so that systems can't actually edit the index live, it will only get updated during sync points.
+3. Right now the store for an index is just a resource, meaning it's publicly available for users to access in systems. If we make some sort of index table as part of World, we can have it be arbitrarly accessable by systems, but only ever mutated during sync points in a safe manner.  This would mean any query could access entities based on any index, without having to pull it into the system (If I understand how sync points work (I probably don't)).
