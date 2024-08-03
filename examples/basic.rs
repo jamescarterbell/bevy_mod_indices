@@ -16,7 +16,7 @@ use bevy::{
     },
     DefaultPlugins,
 };
-use bevy_indices::{EntityIndex, Index};
+use bevy_indices::EntityIndex;
 
 fn main() {
     let app = App::new()
@@ -32,46 +32,44 @@ pub struct TestIndex(usize);
 impl EntityIndex for TestIndex {
     fn on_insert(
         mut world: bevy::ecs::world::DeferredWorld<'_>,
-        entity: bevy::prelude::Entity,
-        value: Self,
+        pairs: [(Self, bevy::prelude::Entity)],
     ) {
-        match world
-            .get_resource_mut::<TestIndexMap>()
-            .expect("INSERT YOUR COLLECTION :)")
-            .entry(value)
-        {
-            Entry::Occupied(mut o) => {
-                o.get_mut().insert(entity);
-            }
-            Entry::Vacant(v) => {
-                let mut set = HashSet::default();
-                set.insert(entity);
-                v.insert(set);
-            }
-        };
+        let store = world.get_index_store_mut::<TestIndexMap>();
+
+        for (key, entity) in pairs {
+            match store.entry(key) {
+                Entry::Occupied(mut o) => {
+                    o.get_mut().insert(entity);
+                }
+                Entry::Vacant(v) => {
+                    let mut set = HashSet::default();
+                    set.insert(entity);
+                    v.insert(set);
+                }
+            };
+        }
     }
 
     fn on_remove(
         mut world: bevy::ecs::world::DeferredWorld<'_>,
-        entity: bevy::prelude::Entity,
-        value: Self,
+        pairs: [(Self, bevy::prelude::Entity)],
     ) {
-        match world
-            .get_resource_mut::<TestIndexMap>()
-            .expect("INSERT YOUR COLLECTION :)")
-            .entry(value)
-        {
-            Entry::Occupied(mut o) => {
-                let set = o.get_mut();
-                set.remove(&entity);
-                if set.len() == 0 {
-                    o.remove();
+        let store = world.get_index_store_mut::<TestIndexMap>();
+
+        for (key, entity) in pairs {
+            match store.entry(key) {
+                Entry::Occupied(mut o) => {
+                    let set = o.get_mut();
+                    set.remove(&entity);
+                    if set.len() == 0 {
+                        o.remove();
+                    }
                 }
-            }
-            Entry::Vacant(v) => {
-                panic!("HOW DID WE GET HERE???")
-            }
-        };
+                Entry::Vacant(v) => {
+                    panic!("HOW DID WE GET HERE???")
+                }
+            };
+        }
     }
 }
 
@@ -82,7 +80,6 @@ pub struct TestIndexMap(HashMap<TestIndex, HashSet<Entity>>);
 struct Selected;
 
 fn add_stuff(mut commands: Commands, asset_server: Res<AssetServer>) {
-    commands.init_resource::<TestIndexMap>();
     for i in 1..=5 {
         commands.spawn(Camera2dBundle::default());
         commands.spawn((
@@ -105,39 +102,37 @@ fn add_stuff(mut commands: Commands, asset_server: Res<AssetServer>) {
 fn select_entities(
     keys: Res<ButtonInput<KeyCode>>,
     mut commands: Commands,
-    map: Res<TestIndexMap>,
     mut ents: Query<(&mut Sprite, Option<&Selected>)>,
 ) {
     if keys.just_pressed(KeyCode::Digit1) {
-        add_selection_to(2, &mut commands, &map, &mut ents);
-        add_selection_to(5, &mut commands, &map, &mut ents);
+        add_selection_to(2, &mut commands, &mut ents);
+        add_selection_to(5, &mut commands, &mut ents);
     }
     if keys.just_pressed(KeyCode::Digit2) {
-        add_selection_to(1, &mut commands, &map, &mut ents);
-        add_selection_to(3, &mut commands, &map, &mut ents);
+        add_selection_to(1, &mut commands, &mut ents);
+        add_selection_to(3, &mut commands, &mut ents);
     }
     if keys.just_pressed(KeyCode::Digit3) {
-        add_selection_to(2, &mut commands, &map, &mut ents);
-        add_selection_to(4, &mut commands, &map, &mut ents);
+        add_selection_to(2, &mut commands, &mut ents);
+        add_selection_to(4, &mut commands, &mut ents);
     }
     if keys.just_pressed(KeyCode::Digit4) {
-        add_selection_to(3, &mut commands, &map, &mut ents);
-        add_selection_to(5, &mut commands, &map, &mut ents);
+        add_selection_to(3, &mut commands, &mut ents);
+        add_selection_to(5, &mut commands, &mut ents);
     }
     if keys.just_pressed(KeyCode::Digit5) {
-        add_selection_to(4, &mut commands, &map, &mut ents);
-        add_selection_to(1, &mut commands, &map, &mut ents);
+        add_selection_to(4, &mut commands, &mut ents);
+        add_selection_to(1, &mut commands, &mut ents);
     }
 }
 
 fn add_selection_to(
     index: usize,
     commands: &mut Commands,
-    map: &TestIndexMap,
     ents: &mut Query<(&mut Sprite, Option<&Selected>)>,
 ) {
-    if let Some(ent) = map
-        .get(&TestIndex(index))
+    if let Some(ent) = ents
+        .get_indexed(&TestIndex(index))
         .and_then(|ents| ents.iter().next())
     {
         if let Ok((mut sprite, selected)) = ents.get_mut(*ent) {

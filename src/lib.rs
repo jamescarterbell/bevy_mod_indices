@@ -7,15 +7,19 @@ use bevy::{
         component::{ComponentId, Components, StorageType, Tick},
         query::{FilteredAccess, QueryData, ReadOnlyQueryData, WorldQuery},
         storage::{Table, TableRow},
+        system::SystemParam,
         world::{unsafe_world_cell::UnsafeWorldCell, DeferredWorld},
     },
-    prelude::{Bundle, Component, Entity, World},
+    prelude::{Bundle, Component, Entity, Res, Resource, System, World},
     ptr::OwningPtr,
 };
 
 pub trait EntityIndex: Clone + Send + Sync + 'static {
-    fn on_insert(world: DeferredWorld<'_>, entity: Entity, value: Self);
-    fn on_remove(world: DeferredWorld<'_>, entity: Entity, value: Self);
+    type Requires: SystemParam;
+    type RequiresReadonly: SystemParam;
+
+    fn on_insert(world: Self::Requires, pairs: [(Self, bevy::prelude::Entity)]);
+    fn on_remove(world: Self::Requires, pairs: [(Self, bevy::prelude::Entity)]);
 }
 
 pub struct Index<T: EntityIndex>(pub T);
@@ -133,6 +137,7 @@ impl<T: EntityIndex> Component for InternalIndex<T> {
                 .clone();
             T::on_insert(world, entity, value)
         });
+
         _hooks.on_remove(|world, entity, _id| {
             let value = world
                 .entity(entity)
@@ -186,3 +191,13 @@ unsafe impl<T: EntityIndex> Bundle for Index<T> {
         unsafe { ptr.read() }
     }
 }
+
+pub trait EntityStorage: Resource + 'static {}
+
+#[derive(SystemParam)]
+pub struct IndexStore<'w, T: EntityStorage + 'static> {
+    store: Option<Res<'w, EntityStore<T>>>,
+}
+
+#[derive(Resource)]
+struct EntityStore<T: EntityStorage + 'static>(T);
